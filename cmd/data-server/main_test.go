@@ -164,6 +164,30 @@ func TestDeleteMissingFile(t *testing.T) {
 	}
 }
 
+func TestWriteToBaseDirRejected(t *testing.T) {
+	dir := t.TempDir()
+	dataDir = dir
+	for _, method := range []string{http.MethodPut, http.MethodPost, http.MethodPatch} {
+		req := httptest.NewRequest(method, "/", bytes.NewReader([]byte("x")))
+		rr := httptest.NewRecorder()
+		handle(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("%s /: want 400, got %d", method, rr.Code)
+		}
+	}
+}
+
+func TestDeleteBaseDirRejected(t *testing.T) {
+	dir := t.TempDir()
+	dataDir = dir
+	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	rr := httptest.NewRecorder()
+	handle(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("DELETE /: want 400, got %d", rr.Code)
+	}
+}
+
 func TestMethodNotAllowed(t *testing.T) {
 	dir := t.TempDir()
 	dataDir = dir

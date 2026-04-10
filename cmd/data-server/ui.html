@@ -66,7 +66,7 @@ async function loadFiles() {
     <tr>
       <td><a href="/${encodeURIComponent(f.name)}">${esc(f.name)}${f.dir ? '/' : ''}</a></td>
       <td class="size">${f.dir ? '&mdash;' : fmtSize(f.size)}</td>
-      <td>${f.dir ? '' : `<button class="del" title="Delete" onclick="del('${esc(f.name)}')">&#x2715;</button>`}</td>
+      <td>${f.dir ? '' : `<button class="del" data-name="${esc(f.name)}" title="Delete">&#x2715;</button>`}</td>
     </tr>`).join('');
 }
 
@@ -74,12 +74,15 @@ function esc(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-async function del(name) {
+document.getElementById('files').addEventListener('click', async e => {
+  const btn = e.target.closest('.del');
+  if (!btn) return;
+  const name = btn.dataset.name;
   if (!confirm('Delete ' + name + '?')) return;
   const r = await fetch('/' + encodeURIComponent(name), { method: 'DELETE' });
   if (!r.ok) { alert('Delete failed: ' + r.status); return; }
   loadFiles();
-}
+});
 
 function uploadFile(file) {
   const row = document.createElement('div');

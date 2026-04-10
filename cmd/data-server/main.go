@@ -41,7 +41,7 @@ func main() {
 func safePath(base, urlPath string) (string, bool) {
 	result := filepath.Join(base, filepath.Clean("/"+urlPath))
 	rel, err := filepath.Rel(base, result)
-	if err != nil || strings.HasPrefix(rel, "..") {
+	if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
 		return "", false
 	}
 	return result, true
@@ -61,12 +61,6 @@ func handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGet(w http.ResponseWriter, r *http.Request) {
-	_, ok := safePath(dataDir, r.URL.Path)
-	if !ok {
-		http.Error(w, "invalid path", http.StatusBadRequest)
-		return
-	}
-
 	if r.URL.Path == "/" {
 		if strings.Contains(r.Header.Get("Accept"), "text/html") {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -110,7 +104,7 @@ func serveJSONListing(w http.ResponseWriter) {
 
 func handleWrite(w http.ResponseWriter, r *http.Request) {
 	fpath, ok := safePath(dataDir, r.URL.Path)
-	if !ok {
+	if !ok || fpath == dataDir {
 		http.Error(w, "invalid path", http.StatusBadRequest)
 		return
 	}
@@ -118,12 +112,13 @@ func handleWrite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "mkdir failed", http.StatusInternalServerError)
 		return
 	}
-	tmp := fpath + ".tmp"
-	f, err := os.Create(tmp)
+	// CreateTemp avoids races when concurrent uploads target the same path.
+	f, err := os.CreateTemp(filepath.Dir(fpath), ".upload-*")
 	if err != nil {
 		http.Error(w, "create failed", http.StatusInternalServerError)
 		return
 	}
+	tmp := f.Name()
 	if _, err := io.Copy(f, r.Body); err != nil {
 		f.Close()
 		os.Remove(tmp)
@@ -147,7 +142,7 @@ func handleWrite(w http.ResponseWriter, r *http.Request) {
 
 func handleDelete(w http.ResponseWriter, r *http.Request) {
 	fpath, ok := safePath(dataDir, r.URL.Path)
-	if !ok {
+	if !ok || fpath == dataDir {
 		http.Error(w, "invalid path", http.StatusBadRequest)
 		return
 	}
