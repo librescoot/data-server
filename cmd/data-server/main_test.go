@@ -198,3 +198,50 @@ func TestMethodNotAllowed(t *testing.T) {
 		t.Fatalf("want 405, got %d", rr.Code)
 	}
 }
+
+func checkServerHeader(t *testing.T, rr *httptest.ResponseRecorder) {
+	t.Helper()
+	hdr := rr.Header().Get("Server")
+	if !strings.HasPrefix(hdr, "librescoot-data-server/") {
+		t.Fatalf("Server header: want prefix %q, got %q", "librescoot-data-server/", hdr)
+	}
+}
+
+func TestServerHeader(t *testing.T) {
+	dir := t.TempDir()
+	dataDir = dir
+	handler := serverHeader(handle)
+
+	// GET /
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+	checkServerHeader(t, rr)
+
+	// PUT /somefile
+	req = httptest.NewRequest(http.MethodPut, "/somefile", bytes.NewReader([]byte("x")))
+	rr = httptest.NewRecorder()
+	handler(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("PUT: want 200, got %d", rr.Code)
+	}
+	checkServerHeader(t, rr)
+
+	// DELETE /somefile
+	req = httptest.NewRequest(http.MethodDelete, "/somefile", nil)
+	rr = httptest.NewRecorder()
+	handler(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("DELETE: want 204, got %d", rr.Code)
+	}
+	checkServerHeader(t, rr)
+
+	// OPTIONS / → 405, header must still be set
+	req = httptest.NewRequest(http.MethodOptions, "/", nil)
+	rr = httptest.NewRecorder()
+	handler(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("OPTIONS: want 405, got %d", rr.Code)
+	}
+	checkServerHeader(t, rr)
+}

@@ -26,6 +26,13 @@ func init() {
 	flag.StringVar(&addr, "addr", "0.0.0.0:8080", "listen address")
 }
 
+func serverHeader(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", "librescoot-data-server/"+version)
+		next(w, r)
+	}
+}
+
 func main() {
 	flag.Parse()
 	if os.Getenv("JOURNAL_STREAM") != "" {
@@ -34,7 +41,7 @@ func main() {
 		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 	}
 	log.Printf("data-server %s listening on %s (data: %s)", version, addr, dataDir)
-	http.HandleFunc("/", handle)
+	http.HandleFunc("/", serverHeader(handle))
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
 
@@ -112,7 +119,6 @@ func handleWrite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "mkdir failed", http.StatusInternalServerError)
 		return
 	}
-	// CreateTemp avoids races when concurrent uploads target the same path.
 	f, err := os.CreateTemp(filepath.Dir(fpath), ".upload-*")
 	if err != nil {
 		http.Error(w, "create failed", http.StatusInternalServerError)
