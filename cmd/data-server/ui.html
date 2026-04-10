@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>data-server</title>
+<style>
+  body { font-family: monospace; max-width: 700px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.2rem; margin-bottom: 1rem; }
+  #drop {
+    border: 2px dashed #aaa; border-radius: 4px;
+    padding: 1.5rem; text-align: center; cursor: pointer;
+    margin-bottom: 1rem; color: #666;
+  }
+  #drop.over { background: #f0f4ff; border-color: #3366cc; color: #3366cc; }
+  #drop input { display: none; }
+  #uploads { margin-bottom: 1rem; }
+  .upload-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.3rem 0; font-size: 0.9rem; }
+  .upload-row progress { flex: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th { text-align: left; border-bottom: 1px solid #ddd; padding: 0.3rem 0.5rem; color: #666; }
+  td { padding: 0.3rem 0.5rem; border-bottom: 1px solid #f0f0f0; }
+  td a { color: #222; text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  .size { color: #888; }
+  .del { background: none; border: none; cursor: pointer; color: #c00; padding: 0 0.3rem; font-size: 1rem; }
+  .del:hover { color: #f00; }
+  #empty { color: #aaa; font-style: italic; margin: 1rem 0; }
+</style>
+</head>
+<body>
+<h1>&#128193; /data</h1>
+
+<div id="drop">
+  Drop files here to upload &mdash; or <u>click to browse</u>
+  <input type="file" id="fileinput" multiple>
+</div>
+<div id="uploads"></div>
+
+<table>
+  <thead><tr><th>Name</th><th>Size</th><th></th></tr></thead>
+  <tbody id="files"></tbody>
+</table>
+<div id="empty" style="display:none">No files yet.</div>
+
+<script>
+function fmtSize(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
+  return (b / 1073741824).toFixed(2) + ' GB';
+}
+
+async function loadFiles() {
+  const r = await fetch('/', { headers: { Accept: 'application/json' } });
+  const files = await r.json();
+  const tbody = document.getElementById('files');
+  const empty = document.getElementById('empty');
+  if (!files.length) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = files.map(f => `
+    <tr>
+      <td><a href="/${encodeURIComponent(f.name)}">${esc(f.name)}${f.dir ? '/' : ''}</a></td>
+      <td class="size">${f.dir ? '&mdash;' : fmtSize(f.size)}</td>
+      <td>${f.dir ? '' : `<button class="del" title="Delete" onclick="del('${esc(f.name)}')">&#x2715;</button>`}</td>
+    </tr>`).join('');
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function del(name) {
+  if (!confirm('Delete ' + name + '?')) return;
+  const r = await fetch('/' + encodeURIComponent(name), { method: 'DELETE' });
+  if (!r.ok) { alert('Delete failed: ' + r.status); return; }
+  loadFiles();
+}
+
+function uploadFile(file) {
+  const row = document.createElement('div');
+  row.className = 'upload-row';
+  const label = document.createElement('span');
+  label.textContent = file.name;
+  const bar = document.createElement('progress');
+  bar.max = 100; bar.value = 0;
+  row.appendChild(label);
+  row.appendChild(bar);
+  document.getElementById('uploads').appendChild(row);
+
+  const xhr = new XMLHttpRequest();
+  xhr.upload.addEventListener('progress', e => {
+    if (e.lengthComputable) bar.value = Math.round(e.loaded / e.total * 100);
+  });
+  xhr.addEventListener('load', () => {
+    row.remove();
+    if (xhr.status >= 400) { alert('Upload failed (' + xhr.status + '): ' + file.name); }
+    loadFiles();
+  });
+  xhr.addEventListener('error', () => { row.remove(); alert('Upload error: ' + file.name); });
+  xhr.open('PUT', '/' + encodeURIComponent(file.name));
+  xhr.send(file);
+}
+
+const drop = document.getElementById('drop');
+const input = document.getElementById('fileinput');
+
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  Array.from(e.dataTransfer.files).forEach(uploadFile);
+});
+drop.addEventListener('click', () => input.click());
+input.addEventListener('change', () => {
+  Array.from(input.files).forEach(uploadFile);
+  input.value = '';
+});
+
+loadFiles();
+</script>
+</body>
+</html>
