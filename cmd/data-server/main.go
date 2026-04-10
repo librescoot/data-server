@@ -143,6 +143,12 @@ func handleWrite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "rename failed", http.StatusInternalServerError)
 		return
 	}
+	if dir, err := os.Open(filepath.Dir(fpath)); err == nil {
+		dir.Sync()
+		dir.Close()
+	} else {
+		log.Printf("warn: dir sync failed for %s: %v", fpath, err)
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
