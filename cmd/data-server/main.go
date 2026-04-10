@@ -73,7 +73,7 @@ func handleGet(w http.ResponseWriter, r *http.Request) {
 			w.Write(uiHTML)
 			return
 		}
-		serveJSONListing(w, r)
+		serveJSONListing(w)
 		return
 	}
 
@@ -86,7 +86,7 @@ type fileEntry struct {
 	Dir  bool   `json:"dir,omitempty"`
 }
 
-func serveJSONListing(w http.ResponseWriter, r *http.Request) {
+func serveJSONListing(w http.ResponseWriter) {
 	entries, err := os.ReadDir(dataDir)
 	if err != nil {
 		http.Error(w, "readdir failed", http.StatusInternalServerError)
