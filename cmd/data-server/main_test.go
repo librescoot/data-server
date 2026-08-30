@@ -11,7 +11,6 @@ import (
 	"testing"
 )
 
-// GET / with browser Accept → HTML UI
 func TestRootBrowserGetsHTML(t *testing.T) {
 	dir := t.TempDir()
 	dataDir = dir
@@ -32,7 +31,6 @@ func TestRootBrowserGetsHTML(t *testing.T) {
 	}
 }
 
-// GET / without text/html Accept → JSON listing
 func TestRootProgrammaticGetsJSON(t *testing.T) {
 	dir := t.TempDir()
 	dataDir = dir
@@ -212,13 +210,11 @@ func TestServerHeader(t *testing.T) {
 	dataDir = dir
 	handler := serverHeader(handle)
 
-	// GET /
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rr := httptest.NewRecorder()
 	handler(rr, req)
 	checkServerHeader(t, rr)
 
-	// PUT /somefile
 	req = httptest.NewRequest(http.MethodPut, "/somefile", bytes.NewReader([]byte("x")))
 	rr = httptest.NewRecorder()
 	handler(rr, req)
@@ -227,7 +223,6 @@ func TestServerHeader(t *testing.T) {
 	}
 	checkServerHeader(t, rr)
 
-	// DELETE /somefile
 	req = httptest.NewRequest(http.MethodDelete, "/somefile", nil)
 	rr = httptest.NewRecorder()
 	handler(rr, req)
@@ -236,7 +231,6 @@ func TestServerHeader(t *testing.T) {
 	}
 	checkServerHeader(t, rr)
 
-	// OPTIONS / → 405, header must still be set
 	req = httptest.NewRequest(http.MethodOptions, "/", nil)
 	rr = httptest.NewRecorder()
 	handler(rr, req)
