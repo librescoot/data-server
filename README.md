@@ -38,13 +38,13 @@ data-server [-addr ADDRESS] [-data DIRECTORY]
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `-addr` | `0.0.0.0:8080` | HTTP listen address. |
+| `-addr` | `:8080` | Local HTTP address and port, restricted to trusted ingress interfaces. The default supports IPv4 and IPv6 where available. |
 | `-data` | `/data` | Directory to list, serve, write, and delete within. |
 
 Examples:
 
 ```sh
-# Standalone defaults (wildcard listener)
+# Listen through trusted management interfaces only
 data-server
 
 # Limit a local test instance to loopback and a temporary directory
@@ -64,15 +64,47 @@ make lint        # requires golangci-lint
 
 `make fmt`, `make deps`, and `make clean` are also available. The ARM build uses `GOARCH=arm`, `GOARM=7`, disabled CGO, and `-trimpath`.
 
+Listener acceptance tests use isolated Linux network namespaces and veth links
+named after trusted and untrusted interfaces. They require Python 3, iproute2,
+IPv6 support and permission to create namespaces. They do not alter the host's
+interfaces, routes or firewall:
+
+```sh
+GOTOOLCHAIN=go1.25.14 go test -race ./...
+GOTOOLCHAIN=go1.25.14 go build -o /tmp/data-server-listener-test ./cmd/data-server
+sudo python3 tests/test-listeners.py --binary /tmp/data-server-listener-test
+```
+
+These checks cover late interfaces and addresses, link down/up, deletion and
+recreation, revocation on rename (including keep-alive connections), IPv4/IPv6,
+WAN access to private service addresses, source-address impersonation, and
+maintenance file operations.
+
 ## Deployment and runtime dependencies
 
-The Yocto package installs `/usr/bin/data-server` and systemd unit `librescoot-data-server.service`. The unit runs as root, serves `/data`, and selects `-addr 192.168.7.1:8080` on MDB or `-addr 192.168.7.2:8080` on DBC. It requires and starts after network configuration, which keeps that service address available over the PPP backup when USB is down. A failed bind restarts the service without falling back to a wildcard address. The standalone binary's default remains `0.0.0.0:8080`.
+The Yocto package installs `/usr/bin/data-server` and systemd unit `librescoot-data-server.service`. The unit runs as root, serves `/data`, and selects `-addr 192.168.7.1:8080` on MDB or `-addr 192.168.7.2:8080` on DBC. It requires and starts after network configuration, which keeps that service address available over the PPP backup when USB is down. These explicit addresses remain subject to the same ingress restrictions as the standalone default.
 
-The only runtime requirements are a writable configured directory and a network listener. The program has no authentication provider, TLS configuration, request-size limit, or built-in access-control configuration.
+On Linux, each listener is bound with `SO_BINDTODEVICE` to `lo`, `usb0`, `ppp0`,
+or an interface whose name starts with `wg`. This checks ingress devices rather
+than client addresses or HTTP headers. A WAN packet addressed to a private
+service IP is not accepted. The program never creates an unrestricted fallback
+listener, and fails if it cannot enforce device binding or runs on a non-Linux
+platform. The packaged root service has permission to bind devices; custom
+service restrictions must retain that permission.
+
+The interface inventory is reconciled every second. New interfaces get their own
+listeners; deleted or renamed interfaces have their listeners and active
+connections closed. Address changes on an existing interface do not require a
+restart. If an explicit service address is not yet available, binding is retried
+without widening the address or interface policy.
+
+The program requires a writable configured directory. It has no authentication
+provider, TLS configuration or request-size limit; trusted-interface access
+allows all supported file operations.
 
 ## Operational and security notes
 
-- The standalone default exposes read, write, and delete access to `/data` through a wildcard listener. The packaged service binds only the stable board service address; administrators using a routed VPN must connect to that address rather than the VPN IP. Address binding does not filter ingress interfaces: the MDB firewall still blocks WAN traffic addressed to the private service IP. Use a trusted management network and `-addr 127.0.0.1:8080` when remote access is unnecessary.
+- Both standalone and packaged listeners restrict ingress to the trusted interface names above. The packaged service also limits destination addresses to the stable board service IP, so routed VPN clients use that address rather than the VPN IP. Keep the MDB firewall enabled as an additional boundary; this service restriction does not depend on it. Use `-addr 127.0.0.1:8080` when remote access is unnecessary.
 - Treat uploaded content as untrusted. The service does not validate file type, content, or size, and a client can consume available storage.
 - Restrict filesystem permissions and review the configured base directory before enabling write access. Its contents may include credentials, diagnostic data, or files consumed by other services.
 - Atomic replacement protects a completed upload from partial target writes, but a client must still retry failures and verify downloaded content where integrity matters.

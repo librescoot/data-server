@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"flag"
@@ -8,8 +9,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 var (
@@ -23,7 +26,7 @@ var uiHTML []byte
 
 func init() {
 	flag.StringVar(&dataDir, "data", "/data", "base directory to serve")
-	flag.StringVar(&addr, "addr", "0.0.0.0:8080", "listen address")
+	flag.StringVar(&addr, "addr", ":8080", "listen address (trusted interfaces only)")
 }
 
 func serverHeader(next http.HandlerFunc) http.HandlerFunc {
@@ -40,9 +43,14 @@ func main() {
 	} else {
 		log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 	}
-	log.Printf("data-server %s listening on %s (data: %s)", version, addr, dataDir)
-	http.HandleFunc("/", serverHeader(handle))
-	log.Fatal(http.ListenAndServe(addr, nil))
+	log.Printf("data-server %s serving %s on trusted interfaces (address: %s)", version, dataDir, addr)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", serverHeader(handle))
+	if err := serveTrusted(ctx, addr, mux); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func safePath(base, urlPath string) (string, bool) {
