@@ -44,7 +44,7 @@ data-server [-addr ADDRESS] [-data DIRECTORY]
 Examples:
 
 ```sh
-# Use the deployed defaults
+# Standalone defaults (wildcard listener)
 data-server
 
 # Limit a local test instance to loopback and a temporary directory
@@ -66,13 +66,13 @@ make lint        # requires golangci-lint
 
 ## Deployment and runtime dependencies
 
-The Yocto package installs `/usr/bin/data-server` and systemd unit `librescoot-data-server.service`. The shipped unit starts after `local-fs.target`, runs as root, restarts on failure, and invokes the binary without flags; it therefore listens on `0.0.0.0:8080` and serves `/data`.
+The Yocto package installs `/usr/bin/data-server` and systemd unit `librescoot-data-server.service`. The unit runs as root, serves `/data`, and selects `-addr 192.168.7.1:8080` on MDB or `-addr 192.168.7.2:8080` on DBC. It requires and starts after network configuration, which keeps that service address available over the PPP backup when USB is down. A failed bind restarts the service without falling back to a wildcard address. The standalone binary's default remains `0.0.0.0:8080`.
 
 The only runtime requirements are a writable configured directory and a network listener. The program has no authentication provider, TLS configuration, request-size limit, or built-in access-control configuration.
 
 ## Operational and security notes
 
-- The default deployment exposes read, write, and delete access to `/data` on every reachable network interface. Put it behind a trusted management network, firewall, VPN, or reverse proxy; use `-addr 127.0.0.1:8080` when remote access is unnecessary.
+- The standalone default exposes read, write, and delete access to `/data` through a wildcard listener. The packaged service binds only the stable board service address; administrators using a routed VPN must connect to that address rather than the VPN IP. Address binding does not filter ingress interfaces: the MDB firewall still blocks WAN traffic addressed to the private service IP. Use a trusted management network and `-addr 127.0.0.1:8080` when remote access is unnecessary.
 - Treat uploaded content as untrusted. The service does not validate file type, content, or size, and a client can consume available storage.
 - Restrict filesystem permissions and review the configured base directory before enabling write access. Its contents may include credentials, diagnostic data, or files consumed by other services.
 - Atomic replacement protects a completed upload from partial target writes, but a client must still retry failures and verify downloaded content where integrity matters.
