@@ -111,6 +111,8 @@ allows all supported file operations.
 
 ## License
 
-This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+Original Librescoot code in this repository is available, at your option, under
+[AGPL-3.0-or-later](LICENSE) or [CC-BY-NC-SA-4.0](LICENSE.CC-BY-NC-SA-4.0).
+Third-party code retains its existing license.
 
 Made with ❤️ by the Librescoot community
