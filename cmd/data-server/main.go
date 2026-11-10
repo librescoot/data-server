@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/librescoot/data-server/client"
 )
 
 var (
@@ -65,8 +67,16 @@ func safePath(base, urlPath string) (string, bool) {
 func handle(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
+		if r.Method == http.MethodHead && r.Header.Get(client.HeaderUploadID) != "" {
+			handleResumableHead(w, r)
+			return
+		}
 		handleGet(w, r)
 	case http.MethodPut, http.MethodPost, http.MethodPatch:
+		if r.Method == http.MethodPut && r.Header.Get(client.HeaderUploadID) != "" {
+			handleResumablePut(w, r)
+			return
+		}
 		handleWrite(w, r)
 	case http.MethodDelete:
 		handleDelete(w, r)

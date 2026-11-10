@@ -11,7 +11,8 @@ Part of the [Librescoot](https://librescoot.org/) open-source platform.
 - Returns a JSON listing at `GET /`, or an embedded drag-and-drop HTML interface when the request `Accept` header contains `text/html`.
 - Serves files and directories below the configured data directory for `GET` and `HEAD` requests.
 - Accepts complete-file uploads with `PUT`, `POST`, or `PATCH`; creates parent directories as needed.
-- Writes uploads through a temporary file, file sync, rename, and parent-directory sync.
+- Supports resumable, checksummed chunked `PUT` uploads through the shared Go client in `client/`.
+- Writes uploads through a temporary file or durable partial file, file sync, rename, and parent-directory sync.
 - Deletes a path with `DELETE`.
 - Adds `Server: librescoot-data-server/<version>` to every response.
 
@@ -24,11 +25,13 @@ The handler accepts the following methods:
 | `GET /` | HTML UI when `Accept` contains `text/html`; otherwise JSON array of direct child entries (`name`, `size`, and optional `dir`). | `200 OK` |
 | `GET /path` and `HEAD /path` | Serves content from the configured base directory using Go's file server. | `200 OK` when found |
 | `PUT`, `POST`, or `PATCH /path` | Replaces the target file with the request body; creates missing parent directories. | `200 OK` |
+| `HEAD /path` with `X-Librescoot-Upload-ID` and `X-Librescoot-Upload-Length` | Returns the durable resumable-upload offset. The ID is the lowercase SHA-256 of the complete file. | `200 OK` with `X-Librescoot-Upload-Offset` |
+| `PUT /path` with the upload ID, length, and current offset headers | Appends one chunk, resumes at the server's durable offset, verifies the full SHA-256, then atomically replaces the target. Chunks are limited to 8 MiB. | `308 Resume Incomplete` or `201 Created` |
 | `DELETE /path` | Removes the target path. | `204 No Content` |
 
 Unsupported methods return `405 Method Not Allowed`. Uploading to or deleting `/` returns `400 Bad Request`; deleting a missing path returns `404 Not Found`. Write and delete paths are joined under the configured base directory and reject paths outside it.
 
-There is no Redis/Valkey interface.
+There is no Redis/Valkey interface. Go upload clients should use `client.UploadFile`; it resumes transfers against this protocol and uses one full-file `PUT` only when talking to an older server without resumable-upload headers.
 
 ## Configuration
 
@@ -107,7 +110,7 @@ allows all supported file operations.
 - Both standalone and packaged listeners restrict ingress to the trusted interface names above. The packaged service also limits destination addresses to the stable board service IP, so routed VPN clients use that address rather than the VPN IP. Keep the MDB firewall enabled as an additional boundary; this service restriction does not depend on it. Use `-addr 127.0.0.1:8080` when remote access is unnecessary.
 - Treat uploaded content as untrusted. The service does not validate file type, content, or size, and a client can consume available storage.
 - Restrict filesystem permissions and review the configured base directory before enabling write access. Its contents may include credentials, diagnostic data, or files consumed by other services.
-- Atomic replacement protects a completed upload from partial target writes, but a client must still retry failures and verify downloaded content where integrity matters.
+- Atomic replacement protects a completed upload from partial target writes. Resumable uploads retain their verified offset across client disconnects; partial files are not visible at the requested target path.
 
 ## License
 
